@@ -1,5 +1,22 @@
+from dotenv import load_dotenv
 import os
 import mysql.connector
+
+
+# ==========================================
+# LOAD .ENV FILE
+# ==========================================
+
+BASE_DIR = os.path.dirname(
+    os.path.abspath(__file__)
+)
+
+ENV_FILE = os.path.join(
+    BASE_DIR,
+    ".env"
+)
+
+load_dotenv(ENV_FILE)
 
 
 # ==========================================
@@ -8,11 +25,25 @@ import mysql.connector
 
 def get_connection():
 
+    password = os.getenv("DB_PASSWORD")
+
     connection = mysql.connector.connect(
-        host=os.getenv("DB_HOST", "localhost"),
-        user=os.getenv("DB_USER", "root"),
-        password=os.getenv("DB_PASSWORD"),
-        database=os.getenv("DB_NAME", "tridict")
+        host=os.getenv(
+            "DB_HOST",
+            "localhost"
+        ),
+
+        user=os.getenv(
+            "DB_USER",
+            "root"
+        ),
+
+        password=password,
+
+        database=os.getenv(
+            "DB_NAME",
+            "tridict"
+        )
     )
 
     return connection
@@ -22,14 +53,27 @@ def get_connection():
 # SAVE SEARCH HISTORY
 # ==========================================
 
-def save_history(word, language, english, telugu, hindi):
+def save_history(
+    word,
+    language,
+    english,
+    telugu,
+    hindi
+):
 
     connection = get_connection()
+
     cursor = connection.cursor()
 
     sql = """
         INSERT INTO history
-        (searched_word, detected_language, english, telugu, hindi)
+        (
+            searched_word,
+            detected_language,
+            english,
+            telugu,
+            hindi
+        )
         VALUES (%s, %s, %s, %s, %s)
     """
 
@@ -41,7 +85,10 @@ def save_history(word, language, english, telugu, hindi):
         hindi
     )
 
-    cursor.execute(sql, values)
+    cursor.execute(
+        sql,
+        values
+    )
 
     connection.commit()
 
@@ -50,16 +97,26 @@ def save_history(word, language, english, telugu, hindi):
 
 
 # ==========================================
-# GET SEARCH HISTORY
+# GET HISTORY
 # ==========================================
 
 def get_history():
 
     connection = get_connection()
-    cursor = connection.cursor(dictionary=True)
+
+    cursor = connection.cursor(
+        dictionary=True
+    )
 
     sql = """
-        SELECT *
+        SELECT
+            id,
+            searched_word,
+            detected_language,
+            english,
+            telugu,
+            hindi,
+            searched_at
         FROM history
         ORDER BY searched_at DESC
         LIMIT 20
@@ -76,15 +133,18 @@ def get_history():
 
 
 # ==========================================
-# DELETE SEARCH HISTORY
+# DELETE HISTORY
 # ==========================================
 
 def delete_history():
 
     connection = get_connection()
+
     cursor = connection.cursor()
 
-    cursor.execute("DELETE FROM history")
+    cursor.execute(
+        "DELETE FROM history"
+    )
 
     connection.commit()
 
@@ -98,18 +158,24 @@ def delete_history():
 
 if __name__ == "__main__":
 
-    print("Testing MySQL connection...")
+    print(
+        "Testing MySQL connection..."
+    )
 
     try:
 
         connection = get_connection()
 
-        print("MySQL connection successful! ✅")
+        print(
+            "MySQL connection successful! ✅"
+        )
 
         connection.close()
 
     except Exception as e:
 
-        print("MySQL connection failed! ❌")
+        print(
+            "MySQL connection failed! ❌"
+        )
 
         print(e)

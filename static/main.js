@@ -1,6 +1,6 @@
-// --------------------------------
-// Get elements
-// --------------------------------
+// ==========================================
+// GET ELEMENTS
+// ==========================================
 
 const searchInput =
     document.getElementById("searchInput");
@@ -12,75 +12,69 @@ const historyList =
     document.getElementById("historyList");
 
 const deleteHistoryButton =
-    document.getElementById(
-        "deleteHistoryButton"
-    );
+    document.getElementById("deleteHistoryButton");
 
 const errorMessage =
     document.getElementById("errorMessage");
 
 
-// --------------------------------
-// Search
-// --------------------------------
+// ==========================================
+// SEARCH
+// ==========================================
 
 async function searchWord() {
 
-    const word =
-        searchInput.value.trim();
-
+    const word = searchInput.value.trim();
 
     if (!word) {
 
-        errorMessage.textContent =
-            "Please enter a word.";
+        if (errorMessage) {
+            errorMessage.textContent =
+                "Please enter a word.";
+        }
 
         return;
     }
 
-
-    errorMessage.textContent = "";
-
+    if (errorMessage) {
+        errorMessage.textContent = "";
+    }
 
     searchButton.disabled = true;
-
-    searchButton.textContent =
-        "Searching...";
-
+    searchButton.textContent = "Searching...";
 
     try {
 
-        const response =
-            await fetch("/api/search", {
+        const response = await fetch("/api/search", {
 
-                method: "POST",
+            method: "POST",
 
-                headers: {
-                    "Content-Type":
-                        "application/json"
-                },
+            headers: {
+                "Content-Type": "application/json"
+            },
 
-                body: JSON.stringify({
-                    word: word
-                })
+            body: JSON.stringify({
+                word: word
+            })
 
-            });
+        });
 
+        const data = await response.json();
 
-        const data =
-            await response.json();
-
+        console.log("Search response:", data);
 
         if (!data.success) {
 
-            errorMessage.textContent =
-                data.message;
+            if (errorMessage) {
+                errorMessage.textContent =
+                    data.message || "Search failed.";
+            }
 
             return;
         }
 
 
-        // Store result temporarily
+        // Save result temporarily
 
         sessionStorage.setItem(
             "tridictResult",
@@ -90,73 +84,111 @@ async function searchWord() {
 
         // Open result page
 
-        window.location.href =
-            "/result";
+        window.location.href = "/result";
 
 
     } catch (error) {
 
-        console.error(error);
+        console.error("Search error:", error);
 
-        errorMessage.textContent =
-            "Something went wrong. Please try again.";
+        if (errorMessage) {
+            errorMessage.textContent =
+                "Something went wrong. Please try again.";
+        }
 
     } finally {
 
         searchButton.disabled = false;
+        searchButton.textContent = "Search";
 
-        searchButton.textContent =
-            "Search";
     }
 }
 
 
-// --------------------------------
-// Search button
-// --------------------------------
+// ==========================================
+// SEARCH BUTTON
+// ==========================================
 
-searchButton.addEventListener(
-    "click",
-    searchWord
-);
+if (searchButton) {
+
+    searchButton.addEventListener(
+        "click",
+        searchWord
+    );
+
+}
 
 
-// --------------------------------
-// Enter key
-// --------------------------------
+// ==========================================
+// ENTER KEY
+// ==========================================
 
-searchInput.addEventListener(
-    "keydown",
-    function(event) {
+if (searchInput) {
 
-        if (event.key === "Enter") {
+    searchInput.addEventListener(
+        "keydown",
+        function(event) {
 
-            searchWord();
+            if (event.key === "Enter") {
+
+                searchWord();
+
+            }
 
         }
+    );
 
-    }
-);
+}
 
 
-// --------------------------------
-// Load History
-// --------------------------------
+// ==========================================
+// LOAD HISTORY
+// ==========================================
 
 async function loadHistory() {
+
+    // History section doesn't exist on this page
+
+    if (!historyList) {
+        return;
+    }
+
 
     try {
 
         const response =
             await fetch("/api/history");
 
+        console.log(
+            "History HTTP status:",
+            response.status
+        );
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                "History API returned " +
+                response.status
+            );
+
+        }
+
 
         const data =
             await response.json();
 
+        console.log(
+            "History response:",
+            data
+        );
 
-        if (!data.success ||
-            data.history.length === 0) {
+
+        if (
+            !data.success ||
+            !Array.isArray(data.history) ||
+            data.history.length === 0
+        ) {
 
             historyList.innerHTML = `
                 <p class="no-history">
@@ -183,37 +215,43 @@ async function loadHistory() {
 
                 historyItem.innerHTML = `
 
-                    <div>
+                    <div class="history-info">
 
                         <strong>
                             ${escapeHTML(
-                                item.searched_word
+                                item.searched_word || ""
                             )}
                         </strong>
 
                         <small>
                             ${escapeHTML(
-                                item.detected_language
+                                item.detected_language || ""
                             )}
                         </small>
 
                     </div>
 
-                    <span>
+                    <span class="history-arrow">
                         →
                     </span>
 
                 `;
 
 
+                // Search again when history item is clicked
+
                 historyItem.addEventListener(
                     "click",
                     function() {
 
-                        searchInput.value =
-                            item.searched_word;
+                        if (searchInput) {
 
-                        searchWord();
+                            searchInput.value =
+                                item.searched_word;
+
+                            searchWord();
+
+                        }
 
                     }
                 );
@@ -226,69 +264,102 @@ async function loadHistory() {
             }
         );
 
+
     } catch (error) {
 
-        console.error(error);
+        console.error(
+            "History loading error:",
+            error
+        );
+
+        historyList.innerHTML = `
+            <p class="no-history">
+                Unable to load history.
+            </p>
+        `;
 
     }
 }
 
 
-// --------------------------------
-// Delete History
-// --------------------------------
+// ==========================================
+// DELETE HISTORY
+// ==========================================
 
-deleteHistoryButton.addEventListener(
-    "click",
-    async function() {
+if (deleteHistoryButton) {
 
-        const confirmDelete =
-            confirm(
-                "Delete all search history?"
-            );
+    deleteHistoryButton.addEventListener(
+        "click",
+        async function() {
 
-
-        if (!confirmDelete) {
-
-            return;
-
-        }
-
-
-        try {
-
-            const response =
-                await fetch(
-                    "/api/history/delete",
-                    {
-                        method: "DELETE"
-                    }
+            const confirmDelete =
+                confirm(
+                    "Delete all search history?"
                 );
 
 
-            const data =
-                await response.json();
+            if (!confirmDelete) {
+                return;
+            }
 
 
-            if (data.success) {
+            try {
 
-                loadHistory();
+                const response =
+                    await fetch(
+                        "/api/history/delete",
+                        {
+                            method: "DELETE"
+                        }
+                    );
+
+
+                const data =
+                    await response.json();
+
+
+                console.log(
+                    "Delete response:",
+                    data
+                );
+
+
+                if (data.success) {
+
+                    await loadHistory();
+
+                } else {
+
+                    alert(
+                        data.message ||
+                        "Could not delete history."
+                    );
+
+                }
+
+
+            } catch (error) {
+
+                console.error(
+                    "Delete history error:",
+                    error
+                );
+
+                alert(
+                    "Could not delete history."
+                );
 
             }
 
-        } catch (error) {
-
-            console.error(error);
-
         }
+    );
 
-    }
-);
+}
 
 
-// --------------------------------
-// HTML Security Helper
-// --------------------------------
+// ==========================================
+// HTML SECURITY
+// ==========================================
 
 function escapeHTML(text) {
 
@@ -296,14 +367,14 @@ function escapeHTML(text) {
         document.createElement("div");
 
     div.textContent =
-        text;
+        String(text);
 
     return div.innerHTML;
 }
 
 
-// --------------------------------
-// Load history on startup
-// --------------------------------
+// ==========================================
+// LOAD HISTORY WHEN PAGE OPENS
+// ==========================================
 
 loadHistory();

@@ -1,6 +1,8 @@
 from flask import Flask, render_template, request, jsonify
-import requests
 from concurrent.futures import ThreadPoolExecutor
+from dotenv import load_dotenv
+from sarvamai import SarvamAI
+import os
 
 from database import (
     save_history,
@@ -8,7 +10,35 @@ from database import (
     delete_history
 )
 
+
+# ==========================================
+# LOAD ENVIRONMENT VARIABLES
+# ==========================================
+
+load_dotenv()
+
+
+# ==========================================
+# FLASK APP
+# ==========================================
+
 app = Flask(__name__)
+
+
+# ==========================================
+# SARVAM CLIENT
+# ==========================================
+
+SARVAM_API_KEY = os.getenv("SARVAM_API_KEY")
+
+if not SARVAM_API_KEY:
+    print("WARNING: SARVAM_API_KEY is not set.")
+
+sarvam_client = (
+    SarvamAI(api_subscription_key=SARVAM_API_KEY)
+    if SARVAM_API_KEY
+    else None
+)
 
 
 # ==========================================
@@ -19,11 +49,11 @@ def detect_language(text):
 
     for char in text:
 
-        # Telugu Unicode
+        # Telugu
         if '\u0C00' <= char <= '\u0C7F':
             return "Telugu"
 
-        # Hindi Unicode
+        # Hindi / Devanagari
         if '\u0900' <= char <= '\u097F':
             return "Hindi"
 
@@ -31,56 +61,56 @@ def detect_language(text):
 
 
 # ==========================================
-# TRANSLATION
+# LANGUAGE CODES
 # ==========================================
 
-def translate(text, source, target):
+LANGUAGE_CODES = {
+    "English": "en-IN",
+    "Telugu": "te-IN",
+    "Hindi": "hi-IN"
+}
+
+
+# ==========================================
+# SARVAM TRANSLATION
+# ==========================================
+
+def translate(text, source_language, target_language):
 
     try:
 
-        url = "https://api.mymemory.translated.net/get"
-
-        params = {
-            "q": text,
-            "langpair": f"{source}|{target}"
-        }
-
-        response = requests.get(
-            url,
-            params=params,
-            timeout=8
-        )
-
-        if response.status_code != 200:
+        if not sarvam_client:
             return "Translation unavailable"
 
-        data = response.json()
+        source_code = LANGUAGE_CODES[source_language]
+        target_code = LANGUAGE_CODES[target_language]
 
-        result = data.get(
-            "responseData",
-            {}
-        ).get(
-            "translatedText",
-            ""
+        response = sarvam_client.text.translate(
+            input=text,
+            source_language_code=source_code,
+            target_language_code=target_code,
+            model="sarvam-translate:v1"
         )
 
-        if not result:
+        translated_text = response.translated_text
+
+        if not translated_text:
             return "Translation unavailable"
 
-        return result
+        return translated_text.strip()
 
     except Exception as e:
 
-        print("Translation error:", e)
+        print("Sarvam translation error:", e)
 
         return "Translation unavailable"
 
 
 # ==========================================
-# TRANSLATE TWO LANGUAGES AT SAME TIME
+# PARALLEL TRANSLATION
 # ==========================================
 
-def translate_parallel(text, source, targets):
+def translate_parallel(text, source_language, target_languages):
 
     results = {}
 
@@ -90,26 +120,33 @@ def translate_parallel(text, source, targets):
 
         futures = {}
 
-        for target in targets:
+        for target_language in target_languages:
 
-            futures[target] = executor.submit(
+            futures[target_language] = executor.submit(
                 translate,
                 text,
-                source,
-                target
+                source_language,
+                target_language
             )
 
-        for target, future in futures.items():
+        for target_language, future in futures.items():
 
             try:
 
-                results[target] = future.result(
-                    timeout=10
+                results[target_language] = future.result(
+                    timeout=15
                 )
 
-            except Exception:
+            except Exception as e:
 
-                results[target] = "Translation unavailable"
+                print(
+                    "Translation failed:",
+                    e
+                )
+
+                results[target_language] = (
+                    "Translation unavailable"
+                )
 
     return results
 
@@ -172,7 +209,9 @@ def search():
         })
 
 
-    # Detect language
+    # ======================================
+    # DETECT LANGUAGE
+    # ======================================
 
     language = detect_language(word)
 
@@ -192,17 +231,17 @@ def search():
 
         translations = translate_parallel(
             word,
-            "en",
-            ["te", "hi"]
+            "English",
+            ["Telugu", "Hindi"]
         )
 
         telugu = translations.get(
-            "te",
+            "Telugu",
             "Translation unavailable"
         )
 
         hindi = translations.get(
-            "hi",
+            "Hindi",
             "Translation unavailable"
         )
 
@@ -217,17 +256,17 @@ def search():
 
         translations = translate_parallel(
             word,
-            "te",
-            ["en", "hi"]
+            "Telugu",
+            ["English", "Hindi"]
         )
 
         english = translations.get(
-            "en",
+            "English",
             "Translation unavailable"
         )
 
         hindi = translations.get(
-            "hi",
+            "Hindi",
             "Translation unavailable"
         )
 
@@ -242,17 +281,17 @@ def search():
 
         translations = translate_parallel(
             word,
-            "hi",
-            ["en", "te"]
+            "Hindi",
+            ["English", "Telugu"]
         )
 
         english = translations.get(
-            "en",
+            "English",
             "Translation unavailable"
         )
 
         telugu = translations.get(
-            "te",
+            "Telugu",
             "Translation unavailable"
         )
 
@@ -280,7 +319,7 @@ def search():
 
 
     # ======================================
-    # RESULT
+    # RETURN RESULT
     # ======================================
 
     return jsonify({
