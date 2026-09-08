@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <title>TriDict Result</title>
+
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='style.css') }}">
+
+</head>
+
+<body>
+
+<div class="app">
+
+    <!-- Header -->
+
+    <header>
+
+        <div class="logo">
+            🌐 TriDict
+        </div>
+
+        <div class="subtitle">
+            English • తెలుగు • हिन्दी
+        </div>
+
+    </header>
+
+
+    <!-- Main -->
+
+    <main>
+
+        <section class="result-page">
+
+            <a href="/" class="back-button">
+                ← Back to Search
+            </a>
+
+
+            <h1 id="resultWord">
+                Result
+            </h1>
+
+
+            <p id="detectedLanguage"></p>
+
+
+            <!-- English -->
+
+            <div class="language-card">
+
+                <h2>English</h2>
+
+                <p id="englishResult"></p>
+
+            </div>
+
+
+            <!-- Telugu -->
+
+            <div class="language-card">
+
+                <h2>Telugu</h2>
+
+                <p id="teluguResult"></p>
+
+            </div>
+
+
+            <!-- Hindi -->
+
+            <div class="language-card">
+
+                <h2>Hindi</h2>
+
+                <p id="hindiResult"></p>
+
+            </div>
+
+        </section>
+
+    </main>
+
+</div>
+
+
+<script>
+
+const result =
+    JSON.parse(
+        sessionStorage.getItem("tridictResult")
+    );
+
+
+if (result) {
+
+    document.getElementById("resultWord")
+        .textContent =
+        result.searched_word;
+
+
+    document.getElementById("detectedLanguage")
+        .textContent =
+        "Detected language: " +
+        result.detected_language;
+
+
+    document.getElementById("englishResult")
+        .textContent =
+        result.english;
+
+
+    document.getElementById("teluguResult")
+        .textContent =
+        result.telugu;
+
+
+    document.getElementById("hindiResult")
+        .textContent =
+        result.hindi;
+
+}
+
+</script>
+
+</body>
+
+</html>

@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <title>TriDict</title>
+
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='style.css') }}">
+
+</head>
+
+<body>
+
+<div class="app">
+
+    <!-- Header -->
+
+    <header>
+
+        <div class="logo">
+            🌐 TriLingo
+        </div>
+
+        <div class="subtitle">
+            English • తెలుగు • हिन्दी
+        </div>
+
+    </header>
+
+
+    <!-- Search Section -->
+
+    <main>
+
+        <section class="search-section">
+
+            <h1>Dictionary</h1>
+
+            <p>
+                Search English, Telugu or Hindi words
+            </p>
+
+            <div class="search-box">
+
+                <input
+                    type="text"
+                    id="searchInput"
+                    placeholder="Search a word..."
+                    autocomplete="off"
+                >
+
+                <button id="searchButton">
+                    Search
+                </button>
+
+            </div>
+
+            <p id="errorMessage"
+               class="error">
+            </p>
+
+        </section>
+
+
+        <!-- History -->
+
+        <section class="history-section">
+
+            <div class="history-header">
+
+                <h2>Recent Searches</h2>
+
+                <button
+                    id="deleteHistoryButton"
+                    class="delete-button">
+
+                    🗑 Clear History
+
+                </button>
+
+            </div>
+
+            <div id="historyList">
+
+                <p class="no-history">
+                    No searches yet.
+                </p>
+
+            </div>
+
+        </section>
+
+    </main>
+
+</div>
+
+
+<script src="{{ url_for('static', filename='main.js') }}"></script>
+
+</body>
+</html>
