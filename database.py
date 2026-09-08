@@ -1,16 +1,26 @@
+import os
 import mysql.connector
 
 
+# ==========================================
+# MYSQL CONNECTION
+# ==========================================
+
 def get_connection():
+
     connection = mysql.connector.connect(
-        host="localhost",
-        user="root",
-        password="5BS",
-        database="tridict"
+        host=os.getenv("DB_HOST", "localhost"),
+        user=os.getenv("DB_USER", "root"),
+        password=os.getenv("DB_PASSWORD"),
+        database=os.getenv("DB_NAME", "tridict")
     )
 
     return connection
 
+
+# ==========================================
+# SAVE SEARCH HISTORY
+# ==========================================
 
 def save_history(word, language, english, telugu, hindi):
 
@@ -39,6 +49,10 @@ def save_history(word, language, english, telugu, hindi):
     connection.close()
 
 
+# ==========================================
+# GET SEARCH HISTORY
+# ==========================================
+
 def get_history():
 
     connection = get_connection()
@@ -61,6 +75,10 @@ def get_history():
     return history
 
 
+# ==========================================
+# DELETE SEARCH HISTORY
+# ==========================================
+
 def delete_history():
 
     connection = get_connection()
@@ -74,7 +92,10 @@ def delete_history():
     connection.close()
 
 
-# Test MySQL connection
+# ==========================================
+# TEST MYSQL CONNECTION
+# ==========================================
+
 if __name__ == "__main__":
 
     print("Testing MySQL connection...")
