@@ -1,68 +1,60 @@
 from flask import Flask, render_template, request, jsonify
-from concurrent.futures import ThreadPoolExecutor
 from dotenv import load_dotenv
+from concurrent.futures import ThreadPoolExecutor
 from sarvamai import SarvamAI
 import os
+import re
 
 from database import (
     save_history,
     get_history,
-    delete_history
+    delete_history,
+    create_table
 )
 
 
-# ==========================================
+# =========================================================
 # LOAD ENVIRONMENT VARIABLES
-# ==========================================
+# =========================================================
 
-load_dotenv()
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ENV_FILE = os.path.join(BASE_DIR, ".env")
+
+load_dotenv(ENV_FILE)
 
 
-# ==========================================
+# =========================================================
 # FLASK APP
-# ==========================================
+# =========================================================
 
 app = Flask(__name__)
 
 
-# ==========================================
-# SARVAM CLIENT
-# ==========================================
+# =========================================================
+# SARVAM AI
+# =========================================================
 
 SARVAM_API_KEY = os.getenv("SARVAM_API_KEY")
 
 if not SARVAM_API_KEY:
-    print("WARNING: SARVAM_API_KEY is not set.")
+    print("WARNING: SARVAM_API_KEY is not set!")
 
-sarvam_client = (
-    SarvamAI(api_subscription_key=SARVAM_API_KEY)
-    if SARVAM_API_KEY
-    else None
-)
+sarvam_client = None
 
+if SARVAM_API_KEY:
+    try:
+        sarvam_client = SarvamAI(
+            api_subscription_key=SARVAM_API_KEY
+        )
+        print("Sarvam AI connected! ✅")
 
-# ==========================================
-# LANGUAGE DETECTION
-# ==========================================
-
-def detect_language(text):
-
-    for char in text:
-
-        # Telugu
-        if '\u0C00' <= char <= '\u0C7F':
-            return "Telugu"
-
-        # Hindi / Devanagari
-        if '\u0900' <= char <= '\u097F':
-            return "Hindi"
-
-    return "English"
+    except Exception as e:
+        print("Sarvam AI connection failed:", e)
 
 
-# ==========================================
+# =========================================================
 # LANGUAGE CODES
-# ==========================================
+# =========================================================
 
 LANGUAGE_CODES = {
     "English": "en-IN",
@@ -71,16 +63,38 @@ LANGUAGE_CODES = {
 }
 
 
-# ==========================================
-# SARVAM TRANSLATION
-# ==========================================
+# =========================================================
+# LANGUAGE DETECTION
+# =========================================================
 
-def translate(text, source_language, target_language):
+def detect_language(text):
+
+    # Telugu Unicode range
+    if re.search(r"[\u0C00-\u0C7F]", text):
+        return "Telugu"
+
+    # Hindi Unicode range
+    if re.search(r"[\u0900-\u097F]", text):
+        return "Hindi"
+
+    # Otherwise English
+    return "English"
+
+
+# =========================================================
+# TRANSLATE TEXT
+# =========================================================
+
+def translate_text(text, source_language, target_language):
+
+    # Same language
+    if source_language == target_language:
+        return text
+
+    if not sarvam_client:
+        return "Translation service unavailable"
 
     try:
-
-        if not sarvam_client:
-            return "Translation unavailable"
 
         source_code = LANGUAGE_CODES[source_language]
         target_code = LANGUAGE_CODES[target_language]
@@ -92,276 +106,208 @@ def translate(text, source_language, target_language):
             model="sarvam-translate:v1"
         )
 
-        translated_text = response.translated_text
+        # Sarvam SDK response
+        if hasattr(response, "translated_text"):
+            return response.translated_text
 
-        if not translated_text:
-            return "Translation unavailable"
-
-        return translated_text.strip()
-
-    except Exception as e:
-
-        print("Sarvam translation error:", e)
-
-        return "Translation unavailable"
-
-
-# ==========================================
-# PARALLEL TRANSLATION
-# ==========================================
-
-def translate_parallel(text, source_language, target_languages):
-
-    results = {}
-
-    with ThreadPoolExecutor(
-        max_workers=2
-    ) as executor:
-
-        futures = {}
-
-        for target_language in target_languages:
-
-            futures[target_language] = executor.submit(
-                translate,
-                text,
-                source_language,
-                target_language
+        if isinstance(response, dict):
+            return response.get(
+                "translated_text",
+                "Translation unavailable"
             )
 
-        for target_language, future in futures.items():
-
-            try:
-
-                results[target_language] = future.result(
-                    timeout=15
-                )
-
-            except Exception as e:
-
-                print(
-                    "Translation failed:",
-                    e
-                )
-
-                results[target_language] = (
-                    "Translation unavailable"
-                )
-
-    return results
-
-
-# ==========================================
-# HOME
-# ==========================================
-
-@app.route("/")
-def home():
-
-    return render_template(
-        "index.html"
-    )
-
-
-# ==========================================
-# RESULT PAGE
-# ==========================================
-
-@app.route("/result")
-def result_page():
-
-    return render_template(
-        "result.html"
-    )
-
-
-# ==========================================
-# SEARCH
-# ==========================================
-
-@app.route(
-    "/api/search",
-    methods=["POST"]
-)
-def search():
-
-    data = request.get_json()
-
-    if not data:
-
-        return jsonify({
-            "success": False,
-            "message": "Invalid request."
-        })
-
-
-    word = data.get(
-        "word",
-        ""
-    ).strip()
-
-
-    if not word:
-
-        return jsonify({
-            "success": False,
-            "message": "Please enter a word."
-        })
-
-
-    # ======================================
-    # DETECT LANGUAGE
-    # ======================================
-
-    language = detect_language(word)
-
-
-    english = ""
-    telugu = ""
-    hindi = ""
-
-
-    # ======================================
-    # ENGLISH
-    # ======================================
-
-    if language == "English":
-
-        english = word
-
-        translations = translate_parallel(
-            word,
-            "English",
-            ["Telugu", "Hindi"]
-        )
-
-        telugu = translations.get(
-            "Telugu",
-            "Translation unavailable"
-        )
-
-        hindi = translations.get(
-            "Hindi",
-            "Translation unavailable"
-        )
-
-
-    # ======================================
-    # TELUGU
-    # ======================================
-
-    elif language == "Telugu":
-
-        telugu = word
-
-        translations = translate_parallel(
-            word,
-            "Telugu",
-            ["English", "Hindi"]
-        )
-
-        english = translations.get(
-            "English",
-            "Translation unavailable"
-        )
-
-        hindi = translations.get(
-            "Hindi",
-            "Translation unavailable"
-        )
-
-
-    # ======================================
-    # HINDI
-    # ======================================
-
-    elif language == "Hindi":
-
-        hindi = word
-
-        translations = translate_parallel(
-            word,
-            "Hindi",
-            ["English", "Telugu"]
-        )
-
-        english = translations.get(
-            "English",
-            "Translation unavailable"
-        )
-
-        telugu = translations.get(
-            "Telugu",
-            "Translation unavailable"
-        )
-
-
-    # ======================================
-    # SAVE HISTORY
-    # ======================================
-
-    try:
-
-        save_history(
-            word,
-            language,
-            english,
-            telugu,
-            hindi
-        )
+        return str(response)
 
     except Exception as e:
 
         print(
-            "Database error:",
+            f"Translation error "
+            f"{source_language} -> {target_language}:",
             e
         )
 
-
-    # ======================================
-    # RETURN RESULT
-    # ======================================
-
-    return jsonify({
-
-        "success": True,
-
-        "searched_word": word,
-
-        "detected_language": language,
-
-        "english": english,
-
-        "telugu": telugu,
-
-        "hindi": hindi
-
-    })
+        return "Translation unavailable"
 
 
-# ==========================================
-# HISTORY
-# ==========================================
+# =========================================================
+# TRANSLATE INTO ALL THREE LANGUAGES
+# =========================================================
 
-@app.route("/api/history")
-def history():
+def translate_all(text, detected_language):
+
+    languages = [
+        "English",
+        "Telugu",
+        "Hindi"
+    ]
+
+    results = {
+        "English": "",
+        "Telugu": "",
+        "Hindi": ""
+    }
+
+    # Translate two languages in parallel
+    target_languages = [
+        language
+        for language in languages
+        if language != detected_language
+    ]
+
+    results[detected_language] = text
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+
+        futures = {
+            language: executor.submit(
+                translate_text,
+                text,
+                detected_language,
+                language
+            )
+            for language in target_languages
+        }
+
+        for language, future in futures.items():
+
+            try:
+                results[language] = future.result()
+
+            except Exception as e:
+
+                print(
+                    f"Error translating to {language}:",
+                    e
+                )
+
+                results[language] = "Translation unavailable"
+
+    return results
+
+
+# =========================================================
+# HOME PAGE
+# =========================================================
+
+@app.route("/")
+def home():
+
+    return render_template("index.html")
+
+
+# =========================================================
+# RESULT PAGE
+# =========================================================
+
+@app.route("/result")
+def result():
+
+    return render_template("result.html")
+
+
+# =========================================================
+# SEARCH API
+# =========================================================
+
+@app.route("/api/search", methods=["POST"])
+def search():
 
     try:
 
-        data = get_history()
+        data = request.get_json()
+
+        if not data:
+            return jsonify({
+                "success": False,
+                "error": "No data received"
+            }), 400
+
+        word = data.get("word", "").strip()
+
+        if not word:
+
+            return jsonify({
+                "success": False,
+                "error": "Please enter a word"
+            }), 400
+
+        # Sarvam supports up to 2000 characters
+        if len(word) > 2000:
+
+            return jsonify({
+                "success": False,
+                "error": "Please enter 2000 characters or less"
+            }), 400
+
+        # Detect language
+        detected_language = detect_language(word)
+
+        print(
+            f"Searching: {word} | "
+            f"Detected: {detected_language}"
+        )
+
+        # Translate
+        translations = translate_all(
+            word,
+            detected_language
+        )
+
+        english = translations["English"]
+        telugu = translations["Telugu"]
+        hindi = translations["Hindi"]
+
+        # =================================================
+        # SAVE HISTORY
+        # =================================================
+
+        try:
+
+            save_history(
+                word,
+                detected_language,
+                english,
+                telugu,
+                hindi
+            )
+
+            print("History saved successfully! ✅")
+
+        except Exception as e:
+
+            # Don't stop search if history saving fails
+            print(
+                "History save failed:",
+                e
+            )
+
+        # =================================================
+        # RESPONSE
+        # =================================================
 
         return jsonify({
 
             "success": True,
 
-            "history": data
+            "searched_word": word,
 
+            "detected_language":
+                detected_language,
+
+            "english":
+                english,
+
+            "telugu":
+                telugu,
+
+            "hindi":
+                hindi
         })
 
     except Exception as e:
 
         print(
-            "History error:",
+            "Search API error:",
             e
         )
 
@@ -369,38 +315,90 @@ def history():
 
             "success": False,
 
-            "history": []
+            "error":
+                "Something went wrong. Please try again."
+
+        }), 500
+
+
+# =========================================================
+# HISTORY API
+# =========================================================
+
+@app.route("/api/history", methods=["GET"])
+def history():
+
+    try:
+
+        history_data = get_history()
+
+        # Convert datetime to string
+        for item in history_data:
+
+            if item.get("searched_at"):
+
+                item["searched_at"] = \
+                    item["searched_at"].strftime(
+                        "%Y-%m-%d %H:%M:%S"
+                    )
+
+        return jsonify({
+
+            "success": True,
+
+            "history":
+                history_data
 
         })
 
+    except Exception as e:
 
-# ==========================================
-# DELETE HISTORY
-# ==========================================
+        print(
+            "History loading error:",
+            e
+        )
 
-@app.route(
-    "/api/history/delete",
-    methods=["DELETE"]
-)
-def delete_history_api():
+        return jsonify({
+
+            "success": False,
+
+            "error":
+                "Unable to load history",
+
+            "history":
+                []
+
+        }), 500
+
+
+# =========================================================
+# DELETE HISTORY API
+# =========================================================
+
+@app.route("/api/history/delete", methods=["POST"])
+def clear_history():
 
     try:
 
         delete_history()
 
+        print(
+            "History deleted successfully! ✅"
+        )
+
         return jsonify({
 
             "success": True,
 
             "message":
-            "History deleted successfully."
+                "History cleared successfully"
 
         })
 
     except Exception as e:
 
         print(
-            "Delete error:",
+            "History delete error:",
             e
         )
 
@@ -408,15 +406,35 @@ def delete_history_api():
 
             "success": False,
 
-            "message":
-            "Could not delete history."
+            "error":
+                "Unable to delete history"
 
-        })
+        }), 500
 
 
-# ==========================================
-# START SERVER
-# ==========================================
+# =========================================================
+# CREATE DATABASE TABLE
+# =========================================================
+
+try:
+
+    create_table()
+
+    print(
+        "Database history table ready! ✅"
+    )
+
+except Exception as e:
+
+    print(
+        "Database initialization failed:",
+        e
+    )
+
+
+# =========================================================
+# RUN APPLICATION
+# =========================================================
 
 if __name__ == "__main__":
 
