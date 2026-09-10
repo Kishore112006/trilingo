@@ -375,40 +375,27 @@ def history():
 # DELETE HISTORY API
 # =========================================================
 
-@app.route("/api/history/delete", methods=["POST"])
+@app.route("/api/history/delete", methods=["DELETE"])
 def clear_history():
 
     try:
 
         delete_history()
 
-        print(
-            "History deleted successfully! ✅"
-        )
+        print("History deleted successfully! ✅")
 
         return jsonify({
-
             "success": True,
-
-            "message":
-                "History cleared successfully"
-
+            "message": "History cleared successfully"
         })
 
     except Exception as e:
 
-        print(
-            "History delete error:",
-            e
-        )
+        print("History delete error:", e)
 
         return jsonify({
-
             "success": False,
-
-            "error":
-                "Unable to delete history"
-
+            "error": "Unable to delete history"
         }), 500
 
 
